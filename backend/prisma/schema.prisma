@@ -1,0 +1,205 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  admin
+  farmer
+  buyer
+}
+
+enum BuyerType {
+  b2c
+  b2b
+}
+
+enum UserStatus {
+  pending
+  active
+  suspended
+}
+
+enum CampaignStatus {
+  draft
+  published
+  closed
+  fulfilled
+  cancelled
+}
+
+enum OrderStatus {
+  pending_payment
+  reserved
+  confirmed
+  partially_delivered
+  delivered
+  cancelled
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+enum DeliveryMode {
+  pickup
+  full_delivery
+  partial_delivery
+}
+
+enum QuoteDeliveryFrequency {
+  once
+  weekly
+  daily
+}
+
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  passwordHash String
+  role         UserRole
+  status       UserStatus        @default(active)
+  phone        String?
+  syncedToCrm  Boolean           @default(false) @map("synced_to_crm")
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  buyerProfile BuyerProfile?
+  farmerProfile FarmerProfile?
+  orders       Order[]
+  campaigns    PreorderCampaign[] @relation("FarmerCampaigns")
+  receivedReviews FarmerReview[] @relation("FarmerReceivedReviews")
+  writtenReviews  FarmerReview[] @relation("BuyerWrittenReviews")
+}
+
+model BuyerProfile {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  buyerType      BuyerType
+  displayName    String
+  avatarUrl      String?
+  companyName    String?
+  taxId          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FarmerProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  displayName   String
+  avatarUrl     String?
+  companyName   String
+  farmTaxId     String
+  pickupAddress String?
+  about         String?
+  region        String?
+  certification String?
+  supplyTerms   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FarmerReview {
+  id          String   @id @default(cuid())
+  farmerId    String
+  buyerId     String?
+  authorName  String
+  rating      Int
+  comment     String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  farmer      User     @relation("FarmerReceivedReviews", fields: [farmerId], references: [id], onDelete: Cascade)
+  buyer       User?    @relation("BuyerWrittenReviews", fields: [buyerId], references: [id], onDelete: SetNull)
+
+  @@index([farmerId, createdAt])
+  @@unique([farmerId, buyerId])
+}
+
+model Product {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  unit        String
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  campaigns   PreorderCampaign[]
+}
+
+model PreorderCampaign {
+  id               String         @id @default(cuid())
+  farmerId         String
+  productId        String
+  title            String
+  season           String
+  description      String?
+  imageUrls        String[]       @default([])
+  totalVolume      Float
+  minOrderVolume   Float
+  unitPrice        Float
+  prepaymentPercent Int
+  availableFrom    DateTime?
+  preorderDeadline DateTime
+  status           CampaignStatus @default(draft)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  farmer           User           @relation("FarmerCampaigns", fields: [farmerId], references: [id], onDelete: Cascade)
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  orders           Order[]
+}
+
+model Order {
+  id               String         @id @default(cuid())
+  campaignId       String
+  buyerId          String
+  volume           Float
+  fixedUnitPrice   Float
+  totalAmount      Float
+  prepaymentAmount Float
+  deliveryMode     DeliveryMode
+  deliveryAddress  String?
+  deliveryComment  String?
+  firstDeliveryDate DateTime?
+  quoteRequestedTotalVolume Float?
+  quoteBatchVolume   Float?
+  quoteDeliveryFrequency QuoteDeliveryFrequency?
+  status           OrderStatus    @default(pending_payment)
+  reservedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  campaign         PreorderCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  buyer            User           @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  paymentRecords   PaymentRecord[]
+}
+
+model PaymentRecord {
+  id        String        @id @default(cuid())
+  orderId   String
+  amount    Float
+  status    PaymentStatus @default(pending)
+  method    String        @default("mock")
+  paidAt    DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  order     Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model FeedbackRequest {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String
+  createdAt   DateTime @default(now())
+}
