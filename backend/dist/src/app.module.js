@@ -14,6 +14,7 @@ const app_service_1 = require("./app.service");
 const admin_module_1 = require("./modules/admin/admin.module");
 const auth_module_1 = require("./modules/auth/auth.module");
 const campaigns_module_1 = require("./modules/campaigns/campaigns.module");
+const crm_module_1 = require("./modules/crm/crm.module");
 const feedback_module_1 = require("./modules/feedback/feedback.module");
 const orders_module_1 = require("./modules/orders/orders.module");
 const payments_module_1 = require("./modules/payments/payments.module");
@@ -32,6 +33,7 @@ exports.AppModule = AppModule = __decorate([
             users_module_1.UsersModule,
             products_module_1.ProductsModule,
             campaigns_module_1.CampaignsModule,
+            crm_module_1.CrmModule,
             feedback_module_1.FeedbackModule,
             orders_module_1.OrdersModule,
             payments_module_1.PaymentsModule,

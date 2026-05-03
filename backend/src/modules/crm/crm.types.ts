@@ -1,0 +1,34 @@
+export type CrmOrderPayload = {
+  orderId: string;
+  status: string;
+  totalAmount: number;
+  volume: number;
+  buyerEmail: string;
+  buyerPhone?: string | null;
+  /** Имя из BuyerProfile.displayName (для полей Имя/Фамилия в EspoCRM). */
+  buyerDisplayName: string;
+  /** Компания из BuyerProfile (для фамилии, если имя одно слово). */
+  buyerCompanyName?: string | null;
+  campaignTitle: string;
+};
+
+export type CrmFeedbackPayload = {
+  id: string;
+  name: string;
+  phone: string;
+  createdAt: Date;
+};
+
+/** Данные нового пользователя для сущности Contact в EspoCRM. */
+export type CrmRegistrationPayload = {
+  userId: string;
+  role: 'buyer' | 'farmer';
+  email: string;
+  phone?: string | null;
+  displayName: string;
+  companyName?: string | null;
+  buyerType?: string | null;
+  taxId?: string | null;
+  farmTaxId?: string | null;
+  pickupAddress?: string | null;
+};

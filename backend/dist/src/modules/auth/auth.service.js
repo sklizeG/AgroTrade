@@ -41,22 +41,27 @@ var __importStar = (this && this.__importStar) || (function () {
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var AuthService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const bcrypt = __importStar(require("bcrypt"));
 const prisma_service_1 = require("../../prisma/prisma.service");
+const crm_service_1 = require("../crm/crm.service");
 const authUserInclude = {
     buyerProfile: true,
     farmerProfile: true,
 };
-let AuthService = class AuthService {
+let AuthService = AuthService_1 = class AuthService {
     prisma;
     jwtService;
-    constructor(prisma, jwtService) {
+    crmService;
+    logger = new common_1.Logger(AuthService_1.name);
+    constructor(prisma, jwtService, crmService) {
         this.prisma = prisma;
         this.jwtService = jwtService;
+        this.crmService = crmService;
     }
     async registerBuyer(dto) {
         await this.ensureEmailIsAvailable(dto.email);
@@ -80,6 +85,25 @@ let AuthService = class AuthService {
             },
             include: authUserInclude,
         });
+        const profile = user.buyerProfile;
+        if (profile) {
+            setImmediate(() => {
+                void this.crmService
+                    .pushRegistrationContact({
+                    userId: user.id,
+                    role: 'buyer',
+                    email: user.email,
+                    phone: user.phone,
+                    displayName: profile.displayName,
+                    companyName: profile.companyName,
+                    buyerType: profile.buyerType,
+                    taxId: profile.taxId,
+                })
+                    .catch((e) => {
+                    this.logger.error(`CRM: ошибка при отправке контакта регистрации покупателя ${user.id}`, e instanceof Error ? e.stack : e);
+                });
+            });
+        }
         return this.buildAuthResponse(user);
     }
     async registerFarmer(dto) {
@@ -103,6 +127,25 @@ let AuthService = class AuthService {
             },
             include: authUserInclude,
         });
+        const profile = user.farmerProfile;
+        if (profile) {
+            setImmediate(() => {
+                void this.crmService
+                    .pushRegistrationContact({
+                    userId: user.id,
+                    role: 'farmer',
+                    email: user.email,
+                    phone: user.phone,
+                    displayName: profile.displayName,
+                    companyName: profile.companyName,
+                    farmTaxId: profile.farmTaxId,
+                    pickupAddress: profile.pickupAddress,
+                })
+                    .catch((e) => {
+                    this.logger.error(`CRM: ошибка при отправке контакта регистрации фермера ${user.id}`, e instanceof Error ? e.stack : e);
+                });
+            });
+        }
         return this.buildAuthResponse(user);
     }
     async login(dto) {
@@ -175,9 +218,10 @@ let AuthService = class AuthService {
     }
 };
 exports.AuthService = AuthService;
-exports.AuthService = AuthService = __decorate([
+exports.AuthService = AuthService = AuthService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        jwt_1.JwtService])
+        jwt_1.JwtService,
+        crm_service_1.CrmService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

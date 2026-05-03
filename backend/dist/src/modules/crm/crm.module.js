@@ -6,20 +6,20 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OrdersModule = void 0;
+exports.CrmModule = void 0;
 const common_1 = require("@nestjs/common");
-const crm_module_1 = require("../crm/crm.module");
-const orders_controller_1 = require("./orders.controller");
-const orders_service_1 = require("./orders.service");
-let OrdersModule = class OrdersModule {
+const config_1 = require("@nestjs/config");
+const crm_controller_1 = require("./crm.controller");
+const crm_service_1 = require("./crm.service");
+let CrmModule = class CrmModule {
 };
-exports.OrdersModule = OrdersModule;
-exports.OrdersModule = OrdersModule = __decorate([
+exports.CrmModule = CrmModule;
+exports.CrmModule = CrmModule = __decorate([
     (0, common_1.Module)({
-        imports: [crm_module_1.CrmModule],
-        controllers: [orders_controller_1.OrdersController],
-        providers: [orders_service_1.OrdersService],
-        exports: [orders_service_1.OrdersService],
+        imports: [config_1.ConfigModule],
+        controllers: [crm_controller_1.CrmController],
+        providers: [crm_service_1.CrmService],
+        exports: [crm_service_1.CrmService],
     })
-], OrdersModule);
-//# sourceMappingURL=orders.module.js.map
+], CrmModule);
+//# sourceMappingURL=crm.module.js.map

@@ -1,0 +1,43 @@
+services:
+  espocrm-db:
+    image: mariadb:11
+    container_name: agrotrade-espocrm-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: espocrm
+      MARIADB_USER: espocrm
+      MARIADB_PASSWORD: espocrm
+    volumes:
+      - espocrm-db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  espocrm:
+    image: espocrm/espocrm:latest
+    container_name: agrotrade-espocrm
+    restart: unless-stopped
+    ports:
+      - "8085:80"
+    environment:
+      ESPOCRM_DATABASE_PLATFORM: Mysql
+      ESPOCRM_DATABASE_HOST: espocrm-db
+      ESPOCRM_DATABASE_PORT: 3306
+      ESPOCRM_DATABASE_USER: espocrm
+      ESPOCRM_DATABASE_PASSWORD: espocrm
+      ESPOCRM_DATABASE_NAME: espocrm
+      ESPOCRM_ADMIN_USERNAME: admin
+      ESPOCRM_ADMIN_PASSWORD: admin123
+      ESPOCRM_SITE_URL: http://localhost:8085
+    depends_on:
+      espocrm-db:
+        condition: service_healthy
+    volumes:
+      - espocrm-data:/var/www/html
+
+volumes:
+  espocrm-db-data:
+  espocrm-data:

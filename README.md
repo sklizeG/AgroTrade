@@ -89,6 +89,39 @@ npm run dev
 
 Frontend будет доступен по адресу: `http://localhost:5173`
 
+### 7) Поднимите локальную CRM (EspoCRM)
+
+```bash
+cd crm/espocrm
+docker compose up -d
+```
+
+CRM будет доступна по адресу: `http://localhost:8085`  
+Логин администратора CRM: `admin`  
+Пароль администратора CRM: `admin123`
+
+После первого входа выполните настройки из `crm/espocrm/README.md`:
+
+- сущность `Lead` + 7 кастомных полей для `Order`;
+- роль `Менеджер` (права на `Contact` как на скриншоте: чтение/добавление/изменение/импорт = `свои`, удаление/экспорт = `нет доступа`);
+- пользователь `manager` с этой ролью.
+
+### 8) Включите интеграцию backend -> CRM
+
+В `backend/.env`:
+
+```env
+CRM_ENABLED=true
+CRM_BASE_URL="http://127.0.0.1:8085"
+CRM_USERNAME="admin"
+CRM_PASSWORD="admin123"
+CRM_LEAD_CURRENCY=RUB
+```
+
+Проверка статуса интеграции (под админ JWT):
+
+- `GET /api/admin/crm/status`
+
 ## Данные администратора по умолчанию
 
 - email: `admin@agrotrade.local`

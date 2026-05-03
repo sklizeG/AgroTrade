@@ -5,6 +5,7 @@ import { AppService } from './app.service';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { CrmModule } from './modules/crm/crm.module';
 import { FeedbackModule } from './modules/feedback/feedback.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
@@ -20,6 +21,7 @@ import { PrismaModule } from './prisma/prisma.module';
     UsersModule,
     ProductsModule,
     CampaignsModule,
+    CrmModule,
     FeedbackModule,
     OrdersModule,
     PaymentsModule,

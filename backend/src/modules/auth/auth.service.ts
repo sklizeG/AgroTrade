@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -8,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { AuthUser } from '../../common/domain';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CrmService } from '../crm/crm.service';
 import { LoginDto, RegisterBuyerDto, RegisterFarmerDto } from './auth.dto';
 
 const authUserInclude = {
@@ -21,9 +23,12 @@ type AuthenticatedUser = Prisma.UserGetPayload<{
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly crmService: CrmService,
   ) {}
 
   async registerBuyer(dto: RegisterBuyerDto) {
@@ -51,6 +56,29 @@ export class AuthService {
       include: authUserInclude,
     });
 
+    const profile = user.buyerProfile;
+    if (profile) {
+      setImmediate(() => {
+        void this.crmService
+          .pushRegistrationContact({
+            userId: user.id,
+            role: 'buyer',
+            email: user.email,
+            phone: user.phone,
+            displayName: profile.displayName,
+            companyName: profile.companyName,
+            buyerType: profile.buyerType,
+            taxId: profile.taxId,
+          })
+          .catch((e) => {
+            this.logger.error(
+              `CRM: ошибка при отправке контакта регистрации покупателя ${user.id}`,
+              e instanceof Error ? e.stack : e,
+            );
+          });
+      });
+    }
+
     return this.buildAuthResponse(user);
   }
 
@@ -76,6 +104,29 @@ export class AuthService {
       },
       include: authUserInclude,
     });
+
+    const profile = user.farmerProfile;
+    if (profile) {
+      setImmediate(() => {
+        void this.crmService
+          .pushRegistrationContact({
+            userId: user.id,
+            role: 'farmer',
+            email: user.email,
+            phone: user.phone,
+            displayName: profile.displayName,
+            companyName: profile.companyName,
+            farmTaxId: profile.farmTaxId,
+            pickupAddress: profile.pickupAddress,
+          })
+          .catch((e) => {
+            this.logger.error(
+              `CRM: ошибка при отправке контакта регистрации фермера ${user.id}`,
+              e instanceof Error ? e.stack : e,
+            );
+          });
+      });
+    }
 
     return this.buildAuthResponse(user);
   }

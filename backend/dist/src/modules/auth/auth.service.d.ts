@@ -1,10 +1,13 @@
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CrmService } from '../crm/crm.service';
 import { LoginDto, RegisterBuyerDto, RegisterFarmerDto } from './auth.dto';
 export declare class AuthService {
     private readonly prisma;
     private readonly jwtService;
-    constructor(prisma: PrismaService, jwtService: JwtService);
+    private readonly crmService;
+    private readonly logger;
+    constructor(prisma: PrismaService, jwtService: JwtService, crmService: CrmService);
     registerBuyer(dto: RegisterBuyerDto): Promise<{
         accessToken: string;
         user: {

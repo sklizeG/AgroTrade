@@ -1,10 +1,13 @@
 import { Prisma } from '@prisma/client';
 import { AuthUser } from '../../common/domain';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CrmService } from '../crm/crm.service';
 import { CreateOrderDto } from './orders.dto';
 export declare class OrdersService {
     private readonly prisma;
-    constructor(prisma: PrismaService);
+    private readonly crmService;
+    private readonly logger;
+    constructor(prisma: PrismaService, crmService: CrmService);
     createOrder(buyerId: string, dto: CreateOrderDto): Promise<{
         campaign: {
             farmer: {

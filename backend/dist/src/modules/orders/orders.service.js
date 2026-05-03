@@ -8,10 +8,12 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var OrdersService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.OrdersService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
+const crm_service_1 = require("../crm/crm.service");
 const orderInclude = {
     campaign: {
         include: {
@@ -28,10 +30,13 @@ const orderInclude = {
     },
     paymentRecords: true,
 };
-let OrdersService = class OrdersService {
+let OrdersService = OrdersService_1 = class OrdersService {
     prisma;
-    constructor(prisma) {
+    crmService;
+    logger = new common_1.Logger(OrdersService_1.name);
+    constructor(prisma, crmService) {
         this.prisma = prisma;
+        this.crmService = crmService;
     }
     async createOrder(buyerId, dto) {
         const isQuoteRequest = dto.quoteRequestedTotalVolume !== undefined;
@@ -58,7 +63,7 @@ let OrdersService = class OrdersService {
                 throw new common_1.BadRequestException('Quote batch volume cannot exceed requested total volume');
             }
         }
-        return this.prisma.$transaction(async (tx) => {
+        const { order, buyerEmail, buyerPhone, buyerDisplayName, buyerCompanyName, campaignTitle, } = await this.prisma.$transaction(async (tx) => {
             const campaign = await tx.preorderCampaign.findUnique({
                 where: { id: dto.campaignId },
                 include: { product: true },
@@ -99,7 +104,7 @@ let OrdersService = class OrdersService {
             }
             const totalAmount = Number((requestedVolume * campaign.unitPrice).toFixed(2));
             const prepaymentAmount = Number(((totalAmount * campaign.prepaymentPercent) / 100).toFixed(2));
-            return tx.order.create({
+            const order = await tx.order.create({
                 data: {
                     campaignId: campaign.id,
                     buyerId,
@@ -126,7 +131,42 @@ let OrdersService = class OrdersService {
                 },
                 include: orderInclude,
             });
+            const buyer = await tx.user.findUnique({
+                where: { id: buyerId },
+                select: {
+                    email: true,
+                    phone: true,
+                    buyerProfile: {
+                        select: { displayName: true, companyName: true },
+                    },
+                },
+            });
+            return {
+                order,
+                buyerEmail: buyer?.email ?? '',
+                buyerPhone: buyer?.phone ?? null,
+                buyerDisplayName: buyer?.buyerProfile?.displayName?.trim() ?? '',
+                buyerCompanyName: buyer?.buyerProfile?.companyName?.trim() ?? null,
+                campaignTitle: campaign.title,
+            };
         });
+        const crmPayload = {
+            orderId: order.id,
+            status: order.status,
+            totalAmount: order.totalAmount,
+            volume: order.volume,
+            buyerEmail,
+            buyerPhone,
+            buyerDisplayName,
+            buyerCompanyName,
+            campaignTitle,
+        };
+        setImmediate(() => {
+            void this.crmService.pushOrder(crmPayload).catch((e) => {
+                this.logger.error(`CRM: исключение при отправке заказа ${order.id}`, e instanceof Error ? e.stack : e);
+            });
+        });
+        return order;
     }
     getBuyerOrders(buyerId) {
         return this.prisma.order.findMany({
@@ -179,8 +219,9 @@ let OrdersService = class OrdersService {
     }
 };
 exports.OrdersService = OrdersService;
-exports.OrdersService = OrdersService = __decorate([
+exports.OrdersService = OrdersService = OrdersService_1 = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService,
+        crm_service_1.CrmService])
 ], OrdersService);
 //# sourceMappingURL=orders.service.js.map
