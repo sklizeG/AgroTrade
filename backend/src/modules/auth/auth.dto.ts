@@ -8,6 +8,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { BUYER_TYPES } from '../../common/domain';
+import { IsOptionalRussianPhone } from '../../common/validators/is-russian-phone';
 
 export class RegisterBuyerDto {
   @ApiProperty()
@@ -37,16 +38,16 @@ export class RegisterBuyerDto {
   @IsString()
   taxId?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: '+79001234567' })
   @IsOptional()
   @IsString()
+  @IsOptionalRussianPhone()
   phone?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   avatarUrl?: string;
-
 }
 
 export class RegisterFarmerDto {
@@ -77,9 +78,10 @@ export class RegisterFarmerDto {
   @IsString()
   pickupAddress?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: '+79001234567' })
   @IsOptional()
   @IsString()
+  @IsOptionalRussianPhone()
   phone?: string;
 
   @ApiPropertyOptional()

@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Length, Matches } from 'class-validator';
+import { IsString, Length } from 'class-validator';
+import { IsRussianPhone } from '../../common/validators/is-russian-phone';
 
 export class CreateFeedbackRequestDto {
   @ApiProperty({ example: 'Иван' })
@@ -7,11 +8,9 @@ export class CreateFeedbackRequestDto {
   @Length(2, 80)
   name!: string;
 
-  @ApiProperty({ example: '+7 (900) 123-45-67' })
+  @ApiProperty({ example: '+79001234567' })
   @IsString()
   @Length(6, 30)
-  @Matches(/^[0-9+\-() ]+$/, {
-    message: 'Phone can contain only digits, spaces and + - ( ) symbols',
-  })
+  @IsRussianPhone()
   phone!: string;
 }

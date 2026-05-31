@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AgroTrade — консоль задач BPMS</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4d;
+      --text: #e8eef5;
+      --muted: #8fa3bc;
+      --accent: #3d9a5f;
+      --warn: #e6a23c;
+      --danger: #e05c5c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+    }
+    header h1 { margin: 0 0 0.25rem; font-size: 1.15rem; }
+    header p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    main { max-width: 960px; margin: 0 auto; padding: 1.25rem; }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: end;
+      margin-bottom: 1rem;
+    }
+    label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: var(--muted); }
+    input, select, button {
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      background: var(--panel);
+      color: var(--text);
+    }
+    button {
+      cursor: pointer;
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+    button.secondary { background: transparent; border-color: var(--border); color: var(--text); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    .pill {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .pill.ok { background: #1e3d2a; color: #7ddea0; }
+    .pill.wait { background: #3d3318; color: #f0c674; }
+    .pill.err { background: #3d1e1e; color: #f0a0a0; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      margin-bottom: 0.75rem;
+    }
+    .card h3 { margin: 0 0 0.35rem; font-size: 1rem; }
+    .meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 0.75rem; }
+    .vars {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 0.5rem;
+      margin: 0.75rem 0 0;
+      font-size: 0.85rem;
+    }
+    .var { background: #121820; border-radius: 6px; padding: 0.45rem 0.6rem; }
+    .var dt { color: var(--muted); margin: 0; }
+    .var dd { margin: 0.15rem 0 0; font-weight: 600; word-break: break-all; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .empty { color: var(--muted); text-align: center; padding: 2rem 1rem; }
+    .links { margin-top: 1rem; font-size: 0.85rem; }
+    .links a { color: #7eb8ff; }
+    #lastRefresh { color: var(--muted); font-size: 0.8rem; margin-left: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AgroTrade — консоль задач Camunda</h1>
+    <p>Автообновление каждые 2 сек. После mock-оплаты status в процессе станет <strong>reserved</strong>.</p>
+  </header>
+  <main>
+    <div class="toolbar">
+      <label>
+        ID заказа (без префикса order-)
+        <input id="orderId" type="text" placeholder="cmo79..." style="min-width: 260px" />
+      </label>
+      <label>
+        Роль (фильтр задач)
+        <select id="roleFilter">
+          <option value="">Все роли</option>
+          <option value="manager">manager — agromanager</option>
+          <option value="admin">admin — agroadmin</option>
+          <option value="farmer">farmer — agrofarmer</option>
+        </select>
+      </label>
+      <label>
+        <span>&nbsp;</span>
+        <label style="flex-direction: row; align-items: center; gap: 0.4rem; color: var(--text);">
+          <input id="autoRefresh" type="checkbox" checked style="width: auto" />
+          Автообновление
+        </label>
+      </label>
+      <button type="button" id="refreshBtn" class="secondary">Обновить сейчас</button>
+    </div>
+
+    <div class="status-bar">
+      <span id="processState">Укажите ID заказа</span>
+      <span id="lastRefresh"></span>
+    </div>
+
+    <div id="tasks"></div>
+
+    <div class="links">
+      <a href="http://localhost:8080/camunda/app/cockpit/" target="_blank" rel="noopener">Cockpit</a>
+      ·
+      <a href="http://localhost:8080/camunda/app/tasklist/" target="_blank" rel="noopener">Стандартный Tasklist</a>
+    </div>
+  </main>
+
+  <script>
+    const ENGINE = '/engine-rest';
+    const AUTH = 'Basic ' + btoa('demo:demo');
+    const TASK_ROLES = {
+      Task_ManagerReview: 'manager',
+      Task_ManagerPaymentFollowup: 'manager',
+      Task_AdminConfirm: 'admin',
+      Task_FarmerPrepare: 'farmer',
+      Task_ManagerShipment: 'manager',
+      Task_ManagerDelivery: 'manager',
+      Task_AdminClose: 'admin',
+    };
+    const ROLE_USERS = {
+      manager: 'agromanager',
+      admin: 'agroadmin',
+      farmer: 'agrofarmer',
+    };
+
+    const orderInput = document.getElementById('orderId');
+    const roleFilter = document.getElementById('roleFilter');
+    const autoRefresh = document.getElementById('autoRefresh');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const tasksEl = document.getElementById('tasks');
+    const processState = document.getElementById('processState');
+    const lastRefresh = document.getElementById('lastRefresh');
+
+    let pollTimer = null;
+    let busy = false;
+
+    const params = new URLSearchParams(location.search);
+    if (params.get('order')) {
+      orderInput.value = params.get('order');
+    }
+
+    orderInput.addEventListener('change', () => {
+      const id = orderInput.value.trim();
+      if (id) {
+        history.replaceState(null, '', '?order=' + encodeURIComponent(id));
+      }
+      schedulePoll(true);
+    });
+
+    roleFilter.addEventListener('change', () => schedulePoll(true));
+    autoRefresh.addEventListener('change', () => schedulePoll(true));
+    refreshBtn.addEventListener('click', () => schedulePoll(true));
+
+    function schedulePoll(immediate) {
+      if (pollTimer) clearInterval(pollTimer);
+      if (autoRefresh.checked) {
+        if (immediate) void refresh();
+        pollTimer = setInterval(refresh, 2000);
+      } else if (immediate) {
+        void refresh();
+      }
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(ENGINE + path, {
+        ...options,
+        headers: {
+          Authorization: AUTH,
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+        },
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error('HTTP ' + res.status + ': ' + text.slice(0, 200));
+      }
+      if (res.status === 204) return null;
+      const ct = res.headers.get('content-type') || '';
+      if (ct.includes('application/json')) return res.json();
+      return null;
+    }
+
+    async function refresh() {
+      if (busy) return;
+      const orderId = orderInput.value.trim();
+      if (!orderId) {
+        processState.innerHTML = '<span class="pill wait">Укажите ID заказа</span>';
+        tasksEl.innerHTML = '<p class="empty">Введите ID заказа из AgroTrade или добавьте <code>?order=...</code> в URL.</p>';
+        return;
+      }
+
+      busy = true;
+      refreshBtn.disabled = true;
+      try {
+        const businessKey = 'order-' + orderId;
+        const instances = await api('/process-instance?businessKey=' + encodeURIComponent(businessKey) + '&active=true');
+        const vars = instances.length
+          ? await api('/process-instance/' + instances[0].id + '/variables')
+          : null;
+
+        const status = vars?.status?.value ?? '—';
+        if (!instances.length) {
+          processState.innerHTML = '<span class="pill ok">Процесс завершён или не найден</span> · businessKey: <code>' + businessKey + '</code>';
+          tasksEl.innerHTML = '<p class="empty">Нет активного экземпляра. Возможно, процесс уже закрыт.</p>';
+        } else {
+          const statusClass = status === 'reserved' ? 'ok' : status === 'pending_payment' ? 'wait' : '';
+          processState.innerHTML =
+            '<span class="pill ' + statusClass + '">status: ' + status + '</span>' +
+            ' · instance: <code>' + instances[0].id.slice(0, 8) + '…</code>' +
+            ' · businessKey: <code>' + businessKey + '</code>';
+        }
+
+        let tasks = await api('/task?processInstanceBusinessKey=' + encodeURIComponent(businessKey) + '&active=true');
+        const filter = roleFilter.value;
+        if (filter) {
+          tasks = tasks.filter((t) => TASK_ROLES[t.taskDefinitionKey] === filter);
+        }
+
+        if (!tasks.length) {
+          tasksEl.innerHTML = instances.length
+            ? '<p class="empty">Нет активных задач для выбранной роли. Подождите автообновление или смените фильтр.</p>'
+            : '';
+        } else {
+          tasksEl.innerHTML = tasks.map(renderTask).join('');
+          tasksEl.querySelectorAll('[data-complete]').forEach((btn) => {
+            btn.addEventListener('click', () => completeTask(btn.dataset.complete, btn.dataset.role));
+          });
+        }
+
+        lastRefresh.textContent = 'Обновлено: ' + new Date().toLocaleTimeString();
+      } catch (e) {
+        processState.innerHTML = '<span class="pill err">Ошибка</span> ' + e.message;
+        tasksEl.innerHTML = '';
+      } finally {
+        busy = false;
+        refreshBtn.disabled = false;
+      }
+    }
+
+    function renderTask(task) {
+      const role = TASK_ROLES[task.taskDefinitionKey] || '?';
+      const user = ROLE_USERS[role] || 'demo';
+      return (
+        '<article class="card" data-task-id="' + task.id + '">' +
+          '<h3>' + escapeHtml(task.name || task.taskDefinitionKey) + '</h3>' +
+          '<div class="meta">Роль: <strong>' + role + '</strong> · пользователь: <code>' + user + '</code></div>' +
+          '<div class="actions">' +
+            '<button type="button" data-complete="' + task.id + '" data-role="' + role + '">Выполнить задачу</button>' +
+          '</div>' +
+        '</article>'
+      );
+    }
+
+    async function completeTask(taskId, role) {
+      const userId = ROLE_USERS[role] || 'demo';
+      try {
+        await api('/task/' + taskId + '/claim', {
+          method: 'POST',
+          body: JSON.stringify({ userId }),
+        });
+      } catch (_) {
+        /* уже назначена — ок */
+      }
+      await api('/task/' + taskId + '/complete', {
+        method: 'POST',
+        body: JSON.stringify({ variables: {} }),
+      });
+      await refresh();
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    schedulePoll(true);
+  </script>
+</body>
+</html>

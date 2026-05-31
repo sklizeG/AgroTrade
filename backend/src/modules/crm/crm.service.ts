@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type {
+import { formatRussianPhoneForEspo } from '../../common/phone.util';
+import { BpmsService } from '../bpms/bpms.service';import type {
   CrmFeedbackPayload,
   CrmOrderPayload,
   CrmRegistrationPayload,
@@ -11,7 +12,10 @@ import type {
 export class CrmService {
   private readonly logger = new Logger(CrmService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly bpmsService: BpmsService,
+  ) {}
 
   /** true / 1 / yes (без учёта регистра) */
   isEnabled(): boolean {
@@ -62,8 +66,7 @@ export class CrmService {
   async pushOrder(payload: CrmOrderPayload): Promise<void> {
     const email = payload.buyerEmail?.trim() || '';
     const rawPhone = payload.buyerPhone?.trim() || '';
-    const espPhone = this.formatPhoneForEspo(rawPhone);
-    const { firstName, lastName } = this.splitBuyerName(
+    const espPhone = this.resolvePhoneForCrm(rawPhone, 'order', payload.orderId);    const { firstName, lastName } = this.splitBuyerName(
       payload.buyerDisplayName,
       payload.buyerCompanyName,
       email,
@@ -110,7 +113,41 @@ export class CrmService {
       lead.campaignId = campaignId;
     }
 
-    await this.postLead(lead, 'order');
+    const leadId = await this.postLead(lead, 'order');
+    if (leadId) {
+      await this.bpmsService.startOrderProcess({
+        leadId,
+        orderId: payload.orderId,
+        status: payload.status,
+        totalAmount: payload.totalAmount,
+        volume: payload.volume,
+        buyerEmail: email,
+        buyerPhone: rawPhone || null,
+        buyerDisplayName: payload.buyerDisplayName,
+        buyerCompanyName: payload.buyerCompanyName,
+        campaignTitle: payload.campaignTitle,
+      });
+      return;
+    }
+
+    const existingLeadId = await this.findLeadIdByAgroOrderId(payload.orderId);
+    if (existingLeadId) {
+      this.logger.warn(
+        `CRM: лид для заказа ${payload.orderId} уже существует (${existingLeadId}), запускаем BPMS.`,
+      );
+      await this.bpmsService.startOrderProcess({
+        leadId: existingLeadId,
+        orderId: payload.orderId,
+        status: payload.status,
+        totalAmount: payload.totalAmount,
+        volume: payload.volume,
+        buyerEmail: email,
+        buyerPhone: rawPhone || null,
+        buyerDisplayName: payload.buyerDisplayName,
+        buyerCompanyName: payload.buyerCompanyName,
+        campaignTitle: payload.campaignTitle,
+      });
+    }
   }
 
   async pushFeedbackRequest(payload: CrmFeedbackPayload): Promise<void> {
@@ -121,8 +158,7 @@ export class CrmService {
       `Создана: ${payload.createdAt.toISOString()}`,
     ].join('\n');
 
-    const espPhone = this.formatPhoneForEspo(payload.phone);
-    const body: Record<string, unknown> = {
+    const espPhone = this.resolvePhoneForCrm(payload.phone, 'feedback', payload.id);    const body: Record<string, unknown> = {
       firstName: name,
       lastName: 'Заявка',
       description,
@@ -150,8 +186,7 @@ export class CrmService {
     }
 
     const rawPhone = payload.phone?.trim() || '';
-    const espPhone = this.formatPhoneForEspo(rawPhone);
-    const { firstName, lastName } = this.splitBuyerName(
+    const espPhone = this.resolvePhoneForCrm(rawPhone, 'registration', payload.userId);    const { firstName, lastName } = this.splitBuyerName(
       payload.displayName,
       payload.companyName,
       email,
@@ -199,29 +234,75 @@ export class CrmService {
   }
 
   /**
-   * EspoCRM валидирует phoneNumber строго; сырой номер из БД может дать HTTP 400.
-   * Для РФ: 10 цифр → +7…; 11 с ведущей 8 → +7…; 11 с ведущей 7 → +7….
+   * Проверка и нормализация телефона до отправки в EspoCRM.
+   * Невалидный номер не попадает в phoneNumber (сырой остаётся в agroBuyerPhone / description).
    */
-  private formatPhoneForEspo(raw: string | null | undefined): string | undefined {
+  private resolvePhoneForCrm(
+    raw: string | null | undefined,
+    kind: string,
+    entityId: string,
+  ): string | undefined {
     if (!raw?.trim()) {
       return undefined;
     }
-    const digits = raw.replace(/\D/g, '');
-    if (digits.length < 10 || digits.length > 15) {
+
+    const formatted = formatRussianPhoneForEspo(raw);
+    if (!formatted) {
+      this.logger.warn(
+        `CRM: телефон "${raw}" не прошёл проверку (${kind}, ${entityId}), phoneNumber не отправляется.`,
+      );
+    }
+
+    return formatted;
+  }
+
+  private extractLeadIdFromResponse(text: string): string | null {
+    try {
+      const data = JSON.parse(text) as unknown;
+      if (Array.isArray(data) && data[0] && typeof data[0] === 'object') {
+        const id = (data[0] as { id?: string }).id;
+        if (id) {
+          return id;
+        }
+      }
+      if (data && typeof data === 'object' && 'id' in data) {
+        const id = (data as { id?: string }).id;
+        if (id) {
+          return id;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  private async findLeadIdByAgroOrderId(
+    orderId: string,
+  ): Promise<string | undefined> {
+    const baseUrl = this.getAuthBaseUrl();
+    const auth = this.getAuthHeader();
+    if (!baseUrl || !auth) {
       return undefined;
     }
 
-    if (digits.length === 11 && digits.startsWith('8')) {
-      return `+7${digits.slice(1)}`;
-    }
-    if (digits.length === 11 && digits.startsWith('7')) {
-      return `+${digits}`;
-    }
-    if (digits.length === 10) {
-      return `+7${digits}`;
-    }
+    const where = [
+      { type: 'equals', attribute: 'agroOrderId', value: orderId } as const,
+    ];
+    const searchUrl = `${baseUrl}/api/v1/Lead?maxSize=1&where=${encodeURIComponent(JSON.stringify(where))}`;
 
-    return `+${digits}`;
+    try {
+      const response = await fetch(searchUrl, {
+        headers: { Authorization: auth },
+      });
+      if (!response.ok) {
+        return undefined;
+      }
+      const data = (await response.json()) as { list?: { id: string }[] };
+      return data.list?.[0]?.id;
+    } catch {
+      return undefined;
+    }
   }
 
   /** Имя + фамилия для полей personName в EspoCRM. */
@@ -480,9 +561,9 @@ export class CrmService {
   private async postLead(
     body: Record<string, unknown>,
     kind: 'order' | 'feedback',
-  ): Promise<void> {
+  ): Promise<string | null> {
     if (!this.isEnabled()) {
-      return;
+      return null;
     }
 
     const baseUrl = this.getAuthBaseUrl();
@@ -492,7 +573,7 @@ export class CrmService {
       this.logger.warn(
         'CRM: интеграция включена (CRM_ENABLED), но не заданы CRM_BASE_URL / CRM_USERNAME / CRM_PASSWORD.',
       );
-      return;
+      return null;
     }
 
     const url = `${baseUrl}/api/v1/Lead`;
@@ -507,20 +588,32 @@ export class CrmService {
         body: JSON.stringify(body),
       });
 
-      if (!response.ok) {
-        const text = await response.text();
-        this.logger.error(
-          `CRM: создание лида не удалось (${kind}). POST ${url} -> HTTP ${response.status}: ${text.slice(0, 1200)}`,
-        );
-        return;
+      if (response.ok) {
+        const data = (await response.json()) as { id?: string };
+        this.logger.log(`CRM: лид создан (${kind}), HTTP ${response.status}`);
+        return data.id ?? null;
       }
 
-      this.logger.log(`CRM: лид создан (${kind}), HTTP ${response.status}`);
+      const text = await response.text();
+
+      const conflictId = this.extractLeadIdFromResponse(text);
+      if (response.status === 409 && conflictId) {
+        this.logger.warn(
+          `CRM: лид уже существует (${kind}), id=${conflictId}.`,
+        );
+        return conflictId;
+      }
+
+      this.logger.error(
+        `CRM: создание лида не удалось (${kind}). POST ${url} -> HTTP ${response.status}: ${text.slice(0, 1200)}`,
+      );
+      return null;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       this.logger.error(
         `CRM: сеть или URL (${kind}). POST ${url} — ${msg}`,
       );
+      return null;
     }
   }
 }

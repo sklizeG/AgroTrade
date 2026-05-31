@@ -1,0 +1,16 @@
+# Camunda Platform 7 Run — BPMS для ПР-06 (AgroTrade)
+# UI: http://localhost:8080/camunda/app/
+# REST: http://localhost:8080/engine-rest
+# Логин по умолчанию: demo / demo
+services:
+  camunda:
+    image: camunda/camunda-bpm-platform:run-7.21.0
+    container_name: agrotrade-camunda
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./bpmn:/camunda/configuration/resources
+    environment:
+      CAMUNDA_BPM_RUN_EXAMPLE_ENABLED: "false"
+      CAMUNDA_BPM_GENERIC-PROPERTIES_PROPERTIES_ENFORCE-HISTORY-TIME-TO-LIVE: "false"
+    restart: unless-stopped

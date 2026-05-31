@@ -122,6 +122,33 @@ CRM_LEAD_CURRENCY=RUB
 
 - `GET /api/admin/crm/status`
 
+### 9) Поднимите BPMS (Camunda, ПР-06)
+
+```powershell
+cd "E:\AgroTrade 2\bpms\camunda"
+docker compose up -d
+node "E:\AgroTrade 2\bpms\camunda\scripts\seed-identity.mjs"
+```
+
+Camunda UI: `http://localhost:8080/camunda/app/` (логин `demo` / `demo`)  
+Консоль задач (автообновление): `http://localhost:5173/bpms-console?order={id}`  
+Tasklist для ролей: `agromanager` / `agroadmin` / `agrofarmer` (см. `bpms/camunda/README.md`)
+
+В `backend/.env` добавьте:
+
+```env
+BPMS_ENABLED=true
+BPMS_BASE_URL="http://127.0.0.1:8080"
+BPMS_USERNAME="demo"
+BPMS_PASSWORD="demo"
+BPMS_PROCESS_KEY=OrderProcessing
+```
+
+После оформления заказа на сайте (при включённых CRM и BPMS) в Camunda Cockpit появится экземпляр процесса **OrderProcessing** (интеграция CRM→BPMS).
+
+- `GET /api/admin/bpms/status` — статус BPMS  
+- Отчёт ПР-06: `docs/PR-06-BPMS-REPORT.md`
+
 ## Данные администратора по умолчанию
 
 - email: `admin@agrotrade.local`

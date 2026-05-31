@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
+import { BpmsModule } from '../bpms/bpms.module';
 import { OrdersModule } from '../orders/orders.module';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
 
 @Module({
-  imports: [OrdersModule],
+  imports: [OrdersModule, BpmsModule],
   controllers: [PaymentsController],
   providers: [PaymentsService],
 })

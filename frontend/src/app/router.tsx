@@ -3,6 +3,7 @@ import { Navigate, createBrowserRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useAuth } from './auth-context';
 import { AuthPage } from '../pages/auth-page';
+import { BpmsConsolePage } from '../pages/bpms-console-page';
 import { CampaignPage } from '../pages/campaign-page';
 import { CatalogPage } from '../pages/catalog-page';
 import { ContactsPage } from '../pages/contacts-page';
@@ -14,6 +15,7 @@ import { FarmerProfilePage } from '../pages/farmer-profile-page';
 import { FarmersPage } from '../pages/farmers-page';
 import { HomePage } from '../pages/home-page';
 import { RestaurantsPage } from '../pages/restaurants-page';
+import { RouteErrorPage, NotFoundPage } from '../pages/route-error-page';
 import { RootLayout } from './root-layout';
 
 function ProtectedDashboard() {
@@ -44,6 +46,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <RootLayout />,
+    errorElement: <RouteErrorPage />,
     children: [
       {
         index: true,
@@ -104,6 +107,14 @@ export const router = createBrowserRouter([
             <FarmerCampaignEditPage />
           </ProtectedFarmerPage>
         ),
+      },
+      {
+        path: '/bpms-console',
+        element: <BpmsConsolePage />,
+      },
+      {
+        path: '*',
+        element: <NotFoundPage />,
       },
     ],
   },

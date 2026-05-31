@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { AuthUser } from '../../common/domain';
 import { PrismaService } from '../../prisma/prisma.service';
+import { BpmsService } from '../bpms/bpms.service';
 import { OrdersService } from '../orders/orders.service';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class PaymentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
+    private readonly bpmsService: BpmsService,
   ) {}
 
   async mockPay(orderId: string, user: AuthUser) {
@@ -53,6 +55,9 @@ export class PaymentsService {
           paymentRecords: true,
         },
       });
+    }).then(async (order) => {
+      await this.bpmsService.syncOrderStatus(orderId, 'reserved');
+      return order;
     });
   }
 }

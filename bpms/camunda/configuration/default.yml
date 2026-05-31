@@ -1,0 +1,4 @@
+camunda.bpm:
+  generic-properties:
+    properties:
+      enforceHistoryTimeToLive: false
